@@ -35,8 +35,8 @@ resultado do TSE; contra 282 parciais nacionais publicadas, a diferença média 
 
 ## Estimativa do resultado final (não oficial)
 
-Faixa entre dois métodos, calculada no navegador: (A) parcial de cada UF ponderada pelo peso da UF (votos válidos já
-apurados no 2º turno + parte não apurada estimada pelo 1º turno); (B) a mesma parcial corrigida pela curva do 1º turno da própria UF (quanto a fatia do candidato mudou,
+Faixa entre dois métodos, calculada no navegador: (A) votos de cada UF projetados para 100% das seções (votos apurados ÷ fração
+de seções apuradas na UF), somados e convertidos em porcentagem; (B) a mesma parcial corrigida pela curva do 1º turno da própria UF (quanto a fatia do candidato mudou,
 no 1º turno, entre a mesma % de seções e o final). UFs sem parciais entram com o 1º turno + variação média.
 O destaque é o centro da faixa.
 
