@@ -453,13 +453,24 @@ function saldo() {
 const BACKTEST = { centroMedio: 0.38, ufMedio: 0.64, ingenuoMedio: 2.59, faixaDesde: 5 };
 const tpL = p => { const L = p.v['13'] || 0, F = p.v['22'] || 0; return L + F > 0 ? 100 * L / (L + F) : null; };
 
-async function carregarProjecaoBR() {
+// curvas do 1º turno de todas as UFs (usadas na estimativa do Brasil); ficam em cache
+async function carregarT1Todos() {
+  await Promise.all(Object.keys(UFS).filter(u => u !== 'br').map(u => carregarT1(u)));
+}
+
+// parcial atual do 2º turno em cada UF, direto do TSE (estimativa do Brasil e quadro "Apuração por estado")
+async function carregarUFs2() {
   const ufs = Object.keys(UFS).filter(u => u !== 'br');
-  await Promise.all(ufs.map(u => carregarT1(u)));
   const res = await Promise.allSettled(ufs.map(u => getJSON(URL_TSE2(u), { nocache: true })));
-  const pts = {};
-  ufs.forEach((u, i) => { if (res[i].status === 'fulfilled') { try { pts[u] = deTSE(res[i].value).ponto; } catch { /* formato inesperado */ } } });
+  const pts = {}, erros = [];
+  ufs.forEach((u, i) => {
+    if (res[i].status === 'fulfilled') { try { pts[u] = deTSE(res[i].value).ponto; return; } catch { /* formato inesperado */ } }
+    if (estado.projUF?.[u]) pts[u] = estado.projUF[u]; // mantém a última leitura boa
+    erros.push(u);
+  });
   estado.projUF = pts;
+  estado.ufsErro = erros;
+  estado.ufsLidoEm = new Date().toISOString();
 }
 
 function limitesUF(uf, p2) {
@@ -541,6 +552,47 @@ function projecaoCard() {
   box.innerHTML = h;
 }
 
+/* ---------- apuração por estado ---------- */
+let ordemUFs = 'apuracao';
+function quadroUFs() {
+  const box = $('ufs');
+  const ufs = Object.keys(UFS).filter(u => u !== 'br');
+  const lin = ufs.map(u => {
+    const p = estado.projUF?.[u];
+    const x = p ? 100 * p.st / (p.ts || 1) : null;
+    const f = p && p.vv > 0 ? 100 * (p.v['22'] || 0) / p.vv : null;
+    const l = p && p.vv > 0 ? 100 * (p.v['13'] || 0) / p.vv : null;
+    return { u, p, x, f, l };
+  });
+  lin.sort(ordemUFs === 'nome' ? (a, b) => UFS[a.u].localeCompare(UFS[b.u], 'pt-BR')
+    : (a, b) => (b.x ?? -1) - (a.x ?? -1) || UFS[a.u].localeCompare(UFS[b.u], 'pt-BR'));
+  const lidas = lin.filter(k => k.p).length;
+  const comecou = lin.filter(k => k.p && k.p.st > 0).length;
+  const fechadas = lin.filter(k => k.p && k.p.ts && k.p.st >= k.p.ts).length;
+  const lider = k => k.f == null || k.l == null || k.f === k.l ? '' : `<i class="dot" style="--c:${cor(k.f > k.l ? '22' : '13')}" title="lidera"></i>`;
+  let h = `<p class="muted"><i class="dot" style="--c:${cor('22')}"></i>${nomeCand('22')} &nbsp; <i class="dot" style="--c:${cor('13')}"></i>${nomeCand('13')}<br>${comecou} de ${ufs.length} com parciais · ${fechadas} com 100% · ` +
+    `<label class="ordem">Ordenar <select id="ordem-ufs"><option value="apuracao"${ordemUFs === 'apuracao' ? ' selected' : ''}>por % apurado</option>` +
+    `<option value="nome"${ordemUFs === 'nome' ? ' selected' : ''}>por nome</option></select></label></p>`;
+  const cab = `<div class="u-cab"><span>UF</span><span class="n">apurado</span><span class="n"><i class="dot" style="--c:${cor('22')}"></i>${nomeCand('22')[0]}</span><span class="n"><i class="dot" style="--c:${cor('13')}"></i>${nomeCand('13')[0]}</span></div>`;
+  const num = (v, outro) => v == null ? '—' : `<span class="${outro != null && v > outro ? 'lid' : ''}">${f1.format(v)}</span>`;
+  const itens = lin.map(k => `<div class="u-it${k.u === estado.uf ? ' atual' : ''}" data-uf="${k.u}" tabindex="0" role="button" title="Abrir ${UFS[k.u]}">` +
+    `<span class="sigla">${k.u === 'zz' ? 'EXT' : k.u.toUpperCase()}</span>` +
+    (k.p ? `<span class="n pcb" style="--p:${Math.min(100, k.x).toFixed(2)}%">${f1.format(k.x)}%</span>` : '<span class="n muted">s/ leit.</span>') +
+    `<span class="n">${num(k.f, k.l)}</span><span class="n">${num(k.l, k.f)}</span></div>`);
+  const metade = Math.ceil(itens.length / 2);
+  h += `<div class="lista-ufs" style="--linhas:${metade + 1}">${cab}${itens.slice(0, metade).join('')}${cab}${itens.slice(metade).join('')}</div>`;
+  if (!lidas) h += '<p class="muted">Não foi possível ler os arquivos do TSE agora; nova tentativa em 30 s.</p>';
+  else if (estado.ufsErro?.length) h += `<p class="muted">Sem leitura nesta atualização: ${estado.ufsErro.map(u => u.toUpperCase()).join(', ')} (mantida a última leitura, se houver).</p>`;
+  h += '<p class="muted">% de seções apuradas e % dos votos válidos; em negrito, quem lidera no estado. Toque num estado para abri-lo no painel.</p>';
+  box.innerHTML = h;
+  $('ordem-ufs').onchange = e => { ordemUFs = e.target.value; quadroUFs(); };
+  box.querySelectorAll('[data-uf]').forEach(tr => {
+    const abrir = () => { $('uf').value = tr.dataset.uf; $('uf').onchange(); scrollTo({ top: 0, behavior: 'smooth' }); };
+    tr.onclick = abrir;
+    tr.onkeydown = e => { if (e.key === 'Enter') abrir(); };
+  });
+}
+
 function cartoes() {
   const s2 = estado.t2, ao = s2?.ao;
   $('local2').textContent = '· ' + UFS[estado.uf]; $('local3').textContent = '· ' + UFS[estado.uf];
@@ -619,7 +671,7 @@ async function atualizar() {
   $('status').textContent = 'Consultando fontes…';
   try {
     await carregarT1(uf);
-    const [t2] = await Promise.all([carregarT2(uf), uf === 'br' ? carregarProjecaoBR() : null]);
+    const [t2] = await Promise.all([carregarT2(uf), carregarUFs2(), uf === 'br' ? carregarT1Todos() : null]);
     if (uf !== estado.uf) return; // usuário trocou de abrangência no meio da consulta
     estado.t2 = t2;
     estado.fontes = { ...estado.fontes, ...t2.fontes };
@@ -657,13 +709,13 @@ function botaoAoVivo() {
   b.title = estado.xManual ? `Voltar a acompanhar o 2º turno (automático em ${falta} s)` : 'Acompanhando a parcial mais recente do 2º turno';
   const tem2 = (estado.t2?.pontos || []).length > 0;
   $('x-modo').textContent = !estado.xManual
-    ? (tem2 ? '· acompanhando o 2º turno' : '· 2º turno ainda sem parciais (mostrando o final do 1º turno)')
-    : `· escolhido por você; volta ao vivo em ${falta} s`;
+    ? (tem2 ? '· ao vivo' : '· 2º turno sem parciais ainda')
+    : `· manual, volta ao vivo em ${falta} s`;
 }
 function manual() { estado.xManual = true; estado.tocouEm = Date.now(); botaoAoVivo(); }
 function aoVivo() { estado.xManual = false; estado.x = pontoAtual(); $('x').value = estado.x; botaoAoVivo(); desenharTudoLeve(); }
 
-function render() { desenhar(); leitura(); saldo(); cartoes(); projecaoCard(); tabela(); fontes(); relogio(); botaoAoVivo(); }
+function render() { desenhar(); leitura(); saldo(); cartoes(); projecaoCard(); quadroUFs(); tabela(); fontes(); relogio(); botaoAoVivo(); }
 
 function iniciar() {
   const sel = $('uf');
