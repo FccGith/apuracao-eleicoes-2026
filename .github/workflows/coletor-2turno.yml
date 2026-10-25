@@ -1,0 +1,83 @@
+name: Coletor do 2º turno
+
+# Lê os arquivos oficiais do TSE a cada 30 s durante a apuração e grava as parciais por UF no
+# branch "dados" (lido pelo painel via raw.githubusercontent.com). O GitHub pode atrasar ou pular
+# horários agendados; por isso há vários horários e o job se reagenda sozinho ao fim de cada rodada.
+on:
+  workflow_dispatch:
+    inputs:
+      horas:
+        description: "Tempo máximo de execução em horas (máx. 5.7)"
+        default: "5.7"
+  schedule:
+    # 25/10/2026 (UTC). Urnas fecham às 17h de Brasília = 20h UTC.
+    - cron: "45 19 25 10 *"
+    - cron: "5,25,45 20 25 10 *"
+    - cron: "15 21 25 10 *"
+    - cron: "15 23 25 10 *"
+    - cron: "15 2 26 10 *"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: coletor-2turno
+  cancel-in-progress: false
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      DIAS_APURACAO: "2026-10-25 2026-10-26"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar branch de dados
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin dados; then
+            git worktree add -B dados dados origin/dados
+          else
+            git worktree add --orphan -b dados dados
+          fi
+
+      - name: Verificar se a totalização já terminou
+        id: fim
+        run: |
+          if [ -f dados/turno2/estado.json ] && grep -q '"finalizado": true' dados/turno2/estado.json; then
+            echo "pular=1" >> "$GITHUB_OUTPUT"
+            echo "Totalização já concluída; nada a fazer."
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.fim.outputs.pular != '1'
+        with:
+          python-version: "3.12"
+
+      - name: Coletar parciais
+        id: coletar
+        if: steps.fim.outputs.pular != '1'
+        env:
+          DADOS_DIR: dados
+          HORAS: ${{ inputs.horas || '5.7' }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set +e
+          python scripts/gravar_2turno.py
+          echo "codigo=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Reagendar se a apuração não terminou
+        if: steps.coletar.outputs.codigo == '3'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          hoje=$(date -u +%F)
+          if echo "$DIAS_APURACAO" | grep -qw "$hoje"; then
+            gh workflow run coletor-2turno.yml --ref main -R "$GITHUB_REPOSITORY"
+            echo "Nova rodada disparada."
+          else
+            echo "Fora dos dias de apuração; não reagendo."
+          fi
