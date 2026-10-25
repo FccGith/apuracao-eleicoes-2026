@@ -445,11 +445,12 @@ function saldo() {
 /* ---------- cartões do 2º turno, tabela e fontes ---------- */
 /* ---------- estimativa do resultado final (NÃO OFICIAL) ----------
    Faixa entre dois métodos, testados com a apuração real do 2º turno de 2022 (data/projecao/backtest-2022.json):
-     limite A: parcial atual de cada UF, ponderada pelos votos válidos da UF no 1º turno
+     limite A: parcial atual de cada UF, ponderada pelo peso da UF (votos já apurados no 2º turno + parte
+               ainda não apurada, estimada pelos votos válidos da UF no 1º turno)
      limite B: idem, corrigindo cada UF pela variação da curva do 1º turno da própria UF
                (fatia final no 1º turno − fatia no 1º turno com a mesma % de seções da UF)
    UFs ainda sem parciais recebem a fatia final do 1º turno + a variação média das UFs com dados. */
-const BACKTEST = { centroMedio: 0.38, ufMedio: 0.76, ingenuoMedio: 2.59, faixaDesde: 3 };
+const BACKTEST = { centroMedio: 0.38, ufMedio: 0.76, ingenuoMedio: 2.59, faixaDesde: 5 };
 const tpL = p => { const L = p.v['13'] || 0, F = p.v['22'] || 0; return L + F > 0 ? 100 * L / (L + F) : null; };
 
 async function carregarProjecaoBR() {
@@ -480,7 +481,14 @@ function calcularProjecao() {
     return l && { a: l.a, b: l.b, x: ult.x, ufsCom: null };
   }
   const ufs = Object.keys(UFS).filter(u => u !== 'br');
-  const peso = u => { const s = estado.t1[u + ':reconstruido']; return s ? s.pontos[s.pontos.length - 1].vv : 0; };
+  // peso da UF = votos válidos já apurados no 2º turno + parte ainda não apurada, estimada pelo 1º turno.
+  // Com 100% apurado, o peso é o voto real do 2º turno e a estimativa coincide com o resultado oficial.
+  const peso = u => {
+    const s = estado.t1[u + ':reconstruido'];
+    const vv1 = s ? s.pontos[s.pontos.length - 1].vv : 0;
+    const p = estado.projUF?.[u];
+    return p && p.st > 0 ? p.vv + vv1 * Math.max(0, 1 - p.st / p.ts) : vv1;
+  };
   const com = {}, sem = [];
   for (const u of ufs) {
     const p = estado.projUF?.[u];
@@ -525,7 +533,7 @@ function projecaoCard() {
   h += `<p class="proj-info">${cedo ? '<strong>Muito cedo:</strong> com menos de 5% das seções a incerteza é alta. ' : ''}` +
     `Com ${pct(p.x)} das seções totalizadas${p.ufsCom != null ? ` · ${p.ufsCom} de ${p.ufsTotal} UFs com parciais` : ''}. Linha cinza = 50%.</p>`;
   h += `<details class="proj-met"><summary>Como é calculada</summary><ul>` +
-    `<li>Um limite usa a parcial atual de cada ${estado.uf === 'br' ? 'UF, ponderada pelos votos válidos da UF no 1º turno' : 'abrangência como está'}; o outro corrige ${estado.uf === 'br' ? 'cada UF' : 'a parcial'} pela curva do 1º turno (quanto a fatia de cada candidato mudou, no 1º turno, entre esta % de seções e o final). O número em destaque é o centro da faixa.</li>` +
+    `<li>Um limite usa a parcial atual de cada ${estado.uf === 'br' ? 'UF, ponderada pelo peso da UF (votos já apurados no 2º turno + o que falta apurar, estimado pelo 1º turno)' : 'abrangência como está'}; o outro corrige ${estado.uf === 'br' ? 'cada UF' : 'a parcial'} pela curva do 1º turno (quanto a fatia de cada candidato mudou, no 1º turno, entre esta % de seções e o final). O número em destaque é o centro da faixa.</li>` +
     (estado.uf === 'br' ? `<li>UFs ainda sem parciais entram com o resultado do 1º turno ajustado pela variação média das UFs com dados.</li>` : '') +
     `<li>Teste com a apuração real do 2º turno de 2022 (Brasil): erro médio de ${f2.format(BACKTEST.centroMedio)} ponto percentual no centro da faixa, contra ${f2.format(BACKTEST.ingenuoMedio)} da parcial sem correção; a partir de ${BACKTEST.faixaDesde}% das seções o resultado final ficou sempre dentro da faixa. Um único teste não garante o mesmo desempenho em 2026.</li>` +
     `<li>Não é resultado nem previsão oficial. Mudanças de comportamento do eleitor entre os turnos, como na ordem de chegada das seções, podem fazer o resultado sair da faixa.</li></ul></details>`;

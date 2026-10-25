@@ -35,13 +35,13 @@ resultado do TSE; contra 282 parciais nacionais publicadas, a diferença média 
 
 ## Estimativa do resultado final (não oficial)
 
-Faixa entre dois métodos, calculada no navegador: (A) parcial de cada UF ponderada pelos votos válidos da UF no
-1º turno; (B) a mesma parcial corrigida pela curva do 1º turno da própria UF (quanto a fatia do candidato mudou,
+Faixa entre dois métodos, calculada no navegador: (A) parcial de cada UF ponderada pelo peso da UF (votos válidos já
+apurados no 2º turno + parte não apurada estimada pelo 1º turno); (B) a mesma parcial corrigida pela curva do 1º turno da própria UF (quanto a fatia do candidato mudou,
 no 1º turno, entre a mesma % de seções e o final). UFs sem parciais entram com o 1º turno + variação média.
 O destaque é o centro da faixa.
 
 Teste com a apuração real do 2º turno de 2022 (`scripts/backtest_projecao_2022.py`, resultado em
-`data/projecao/backtest-2022.json`): erro médio do centro 0,38 p.p. (parcial sem correção: 2,59 p.p.); a partir de 3%
+`data/projecao/backtest-2022.json`): erro médio do centro 0,38 p.p. (parcial sem correção: 2,59 p.p.); a partir de 5%
 das seções o resultado final ficou sempre dentro da faixa. Aplicar a curva do 1º turno direto no total do Brasil
 erraria ~3 p.p. e por isso não é usado. É um único teste e não garante o mesmo desempenho em 2026.
 

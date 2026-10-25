@@ -3,7 +3,8 @@
 Simula a apuração do 2º turno de 2022 seção a seção (DT_PRIM_TOT_PARCIAL_HOR_TSE) e mede, em cada
 porcentagem de seções do Brasil, o erro de três métodos para a fatia de Lula entre os dois candidatos:
   ingenuo     parcial nacional como está
-  uf          parcial de cada UF ponderada pelos votos válidos da UF no 1º turno
+  uf          parcial de cada UF ponderada pelo peso da UF (votos válidos já apurados no 2º turno +
+                parte não apurada estimada pelos votos válidos da UF no 1º turno)
   uf_curva    idem, corrigindo cada UF pela variação da curva do 1º turno da própria UF
                 (fatia final no 1º turno − fatia no 1º turno quando a UF tinha a mesma % de seções)
 UFs ainda sem seções recebem a fatia final do 1º turno + a variação média das UFs com dados.
@@ -71,14 +72,16 @@ def main():
         for u in ufs:
             T, L, B, V, n = cum[("2", u)]
             i = bisect.bisect_right(T, t)
-            e[u] = (100 * i / n, L[i], B[i])
+            e[u] = (100 * i / n, L[i], B[i], V[i])
         naive = tp(sum(v[1] for v in e.values()), sum(v[2] for v in e.values()))
         com = {u: v for u, v in e.items() if v[1] + v[2] > 0}
-        wc = sum(w[u] for u in com)
-        sw1 = sum(w[u] * (tp(L, B) - fin1[u]) for u, (x, L, B) in com.items()) / wc
-        sw2 = sum(w[u] * (tp(L, B) - t1_em(u, x)) for u, (x, L, B) in com.items()) / wc
-        p1 = sum(w[u] * (tp(*e[u][1:]) if u in com else fin1[u] + sw1) for u in ufs) / W
-        p2 = sum(w[u] * (tp(*e[u][1:]) + fin1[u] - t1_em(u, e[u][0]) if u in com else fin1[u] + sw2) for u in ufs) / W
+        wd = {u: (e[u][3] + w[u] * (1 - e[u][0] / 100)) if u in com else w[u] for u in ufs}
+        wc = sum(wd[u] for u in com)
+        sw1 = sum(wd[u] * (tp(L, B) - fin1[u]) for u, (x, L, B, V) in com.items()) / wc
+        sw2 = sum(wd[u] * (tp(L, B) - t1_em(u, x)) for u, (x, L, B, V) in com.items()) / wc
+        W = sum(wd.values())
+        p1 = sum(wd[u] * (tp(e[u][1], e[u][2]) if u in com else fin1[u] + sw1) for u in ufs) / W
+        p2 = sum(wd[u] * (tp(e[u][1], e[u][2]) + fin1[u] - t1_em(u, e[u][0]) if u in com else fin1[u] + sw2) for u in ufs) / W
         linhas.append({"x": X, "ingenuo": round(naive - fin2, 3), "uf": round(p1 - fin2, 3), "uf_curva": round(p2 - fin2, 3),
                        "centro": round((p1 + p2) / 2 - fin2, 3), "dentro_da_faixa": min(p1, p2) <= fin2 <= max(p1, p2)})
         print(linhas[-1])
