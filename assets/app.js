@@ -443,9 +443,98 @@ function saldo() {
 }
 
 /* ---------- cartões do 2º turno, tabela e fontes ---------- */
+/* ---------- estimativa do resultado final (NÃO OFICIAL) ----------
+   Faixa entre dois métodos, testados com a apuração real do 2º turno de 2022 (data/projecao/backtest-2022.json):
+     limite A: parcial atual de cada UF, ponderada pelos votos válidos da UF no 1º turno
+     limite B: idem, corrigindo cada UF pela variação da curva do 1º turno da própria UF
+               (fatia final no 1º turno − fatia no 1º turno com a mesma % de seções da UF)
+   UFs ainda sem parciais recebem a fatia final do 1º turno + a variação média das UFs com dados. */
+const BACKTEST = { centroMedio: 0.38, ufMedio: 0.76, ingenuoMedio: 2.59, faixaDesde: 3 };
+const tpL = p => { const L = p.v['13'] || 0, F = p.v['22'] || 0; return L + F > 0 ? 100 * L / (L + F) : null; };
+
+async function carregarProjecaoBR() {
+  const ufs = Object.keys(UFS).filter(u => u !== 'br');
+  await Promise.all(ufs.map(u => carregarT1(u)));
+  const res = await Promise.allSettled(ufs.map(u => getJSON(URL_TSE2(u), { nocache: true })));
+  const pts = {};
+  ufs.forEach((u, i) => { if (res[i].status === 'fulfilled') { try { pts[u] = deTSE(res[i].value).ponto; } catch { /* formato inesperado */ } } });
+  estado.projUF = pts;
+}
+
+function limitesUF(uf, p2) {
+  const s1 = estado.t1[uf + ':reconstruido'];
+  const a = p2 ? tpL(p2) : null;
+  if (!s1 || a == null) return null;
+  const fin1 = tpL(s1.pontos[s1.pontos.length - 1]);
+  if (p2.x >= 100 - 1e-9) return { a, b: a, fin1 };
+  const r = valorEm(s1.pontos, Math.max(p2.x, s1.pontos[0].x), tpL);
+  return { a, b: r && r.y != null ? a + fin1 - r.y : a, fin1 };
+}
+
+function calcularProjecao() {
+  const pts2 = estado.t2?.pontos || [];
+  const ult = pts2[pts2.length - 1];
+  if (!ult) return null;
+  if (estado.uf !== 'br') {
+    const l = limitesUF(estado.uf, ult);
+    return l && { a: l.a, b: l.b, x: ult.x, ufsCom: null };
+  }
+  const ufs = Object.keys(UFS).filter(u => u !== 'br');
+  const peso = u => { const s = estado.t1[u + ':reconstruido']; return s ? s.pontos[s.pontos.length - 1].vv : 0; };
+  const com = {}, sem = [];
+  for (const u of ufs) {
+    const p = estado.projUF?.[u];
+    const l = p && p.st > 0 ? limitesUF(u, p) : null;
+    if (l) com[u] = l; else if (estado.t1[u + ':reconstruido']) sem.push(u);
+  }
+  const wc = Object.keys(com).reduce((s, u) => s + peso(u), 0);
+  if (!wc) return null;
+  const swA = Object.entries(com).reduce((s, [u, l]) => s + peso(u) * (l.a - l.fin1), 0) / wc;
+  const swB = Object.entries(com).reduce((s, [u, l]) => s + peso(u) * (l.b - l.fin1), 0) / wc;
+  let A = 0, B = 0, W = 0;
+  for (const u of [...Object.keys(com), ...sem]) {
+    const w = peso(u); W += w;
+    if (com[u]) { A += w * com[u].a; B += w * com[u].b; }
+    else { const fin1 = tpL(estado.t1[u + ':reconstruido'].pontos.slice(-1)[0]); A += w * (fin1 + swA); B += w * (fin1 + swB); }
+  }
+  return { a: A / W, b: B / W, x: ult.x, ufsCom: Object.keys(com).length, ufsTotal: Object.keys(com).length + sem.length };
+}
+
+function projecaoCard() {
+  const box = $('proj');
+  const p = calcularProjecao();
+  if (!p) {
+    box.innerHTML = '<p class="muted">A estimativa aparece quando o TSE publicar as primeiras parciais do 2º turno' +
+      (estado.uf === 'br' ? ' (calculada estado a estado).' : ' desta abrangência.') + '</p>';
+    return;
+  }
+  const lo = Math.min(p.a, p.b), hi = Math.max(p.a, p.b), c = (p.a + p.b) / 2;
+  const cands = [
+    { n: '13', lo, hi, c },
+    { n: '22', lo: 100 - hi, hi: 100 - lo, c: 100 - c },
+  ].sort((x, y) => y.c - x.c);
+  const esc0 = Math.max(0, Math.floor(Math.min(...cands.map(k => k.lo)) / 5) * 5 - 5), esc1 = Math.min(100, Math.ceil(Math.max(...cands.map(k => k.hi)) / 5) * 5 + 5);
+  const pos = v => (100 * (v - esc0) / (esc1 - esc0)).toFixed(2) + '%';
+  const cedo = p.x < 5;
+  let h = cands.map(k => `<div class="proj-c"><div class="proj-top"><span><i class="dot" style="--c:${cor(k.n)}"></i><strong>${nomeCand(k.n)}</strong></span>` +
+    `<span class="proj-num">≈ ${pct(k.c, 1)}</span></div>` +
+    `<div class="proj-escala" aria-hidden="true"><span class="proj-meio" style="left:${pos(50)}"></span>` +
+    `<span class="proj-faixa" style="left:${pos(k.lo)};width:calc(${pos(k.hi)} - ${pos(k.lo)});background:${cor(k.n)}"></span>` +
+    `<span class="proj-centro" style="left:${pos(k.c)}"></span></div>` +
+    `<div class="det">faixa estimada: ${pct(k.lo, 1)} a ${pct(k.hi, 1)} dos votos válidos</div></div>`).join('');
+  h += `<p class="proj-info">${cedo ? '<strong>Muito cedo:</strong> com menos de 5% das seções a incerteza é alta. ' : ''}` +
+    `Com ${pct(p.x)} das seções totalizadas${p.ufsCom != null ? ` · ${p.ufsCom} de ${p.ufsTotal} UFs com parciais` : ''}. Linha cinza = 50%.</p>`;
+  h += `<details class="proj-met"><summary>Como é calculada</summary><ul>` +
+    `<li>Um limite usa a parcial atual de cada ${estado.uf === 'br' ? 'UF, ponderada pelos votos válidos da UF no 1º turno' : 'abrangência como está'}; o outro corrige ${estado.uf === 'br' ? 'cada UF' : 'a parcial'} pela curva do 1º turno (quanto a fatia de cada candidato mudou, no 1º turno, entre esta % de seções e o final). O número em destaque é o centro da faixa.</li>` +
+    (estado.uf === 'br' ? `<li>UFs ainda sem parciais entram com o resultado do 1º turno ajustado pela variação média das UFs com dados.</li>` : '') +
+    `<li>Teste com a apuração real do 2º turno de 2022 (Brasil): erro médio de ${f2.format(BACKTEST.centroMedio)} ponto percentual no centro da faixa, contra ${f2.format(BACKTEST.ingenuoMedio)} da parcial sem correção; a partir de ${BACKTEST.faixaDesde}% das seções o resultado final ficou sempre dentro da faixa. Um único teste não garante o mesmo desempenho em 2026.</li>` +
+    `<li>Não é resultado nem previsão oficial. Mudanças de comportamento do eleitor entre os turnos, como na ordem de chegada das seções, podem fazer o resultado sair da faixa.</li></ul></details>`;
+  box.innerHTML = h;
+}
+
 function cartoes() {
   const s2 = estado.t2, ao = s2?.ao;
-  $('local2').textContent = '· ' + UFS[estado.uf];
+  $('local2').textContent = '· ' + UFS[estado.uf]; $('local3').textContent = '· ' + UFS[estado.uf];
   const ult = s2?.pontos[s2.pontos.length - 1];
   const ts = ao?.ts || ult?.ts;
   if (!ult) {
@@ -521,7 +610,7 @@ async function atualizar() {
   $('status').textContent = 'Consultando fontes…';
   try {
     await carregarT1(uf);
-    const t2 = await carregarT2(uf);
+    const [t2] = await Promise.all([carregarT2(uf), uf === 'br' ? carregarProjecaoBR() : null]);
     if (uf !== estado.uf) return; // usuário trocou de abrangência no meio da consulta
     estado.t2 = t2;
     estado.fontes = { ...estado.fontes, ...t2.fontes };
@@ -565,7 +654,7 @@ function botaoAoVivo() {
 function manual() { estado.xManual = true; estado.tocouEm = Date.now(); botaoAoVivo(); }
 function aoVivo() { estado.xManual = false; estado.x = pontoAtual(); $('x').value = estado.x; botaoAoVivo(); desenharTudoLeve(); }
 
-function render() { desenhar(); leitura(); saldo(); cartoes(); tabela(); fontes(); relogio(); botaoAoVivo(); }
+function render() { desenhar(); leitura(); saldo(); cartoes(); projecaoCard(); tabela(); fontes(); relogio(); botaoAoVivo(); }
 
 function iniciar() {
   const sel = $('uf');

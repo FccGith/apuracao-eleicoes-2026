@@ -33,6 +33,18 @@ Formato dos pontos: `st` seções totalizadas, `pst` = `st`/total × 100, `vv` v
 Validação (`scripts/reconstruir_1turno.py`): o final de cada uma das 29 abrangências confere voto a voto com o
 resultado do TSE; contra 282 parciais nacionais publicadas, a diferença média foi 0,005 p.p. (máxima 0,14 p.p.).
 
+## Estimativa do resultado final (não oficial)
+
+Faixa entre dois métodos, calculada no navegador: (A) parcial de cada UF ponderada pelos votos válidos da UF no
+1º turno; (B) a mesma parcial corrigida pela curva do 1º turno da própria UF (quanto a fatia do candidato mudou,
+no 1º turno, entre a mesma % de seções e o final). UFs sem parciais entram com o 1º turno + variação média.
+O destaque é o centro da faixa.
+
+Teste com a apuração real do 2º turno de 2022 (`scripts/backtest_projecao_2022.py`, resultado em
+`data/projecao/backtest-2022.json`): erro médio do centro 0,38 p.p. (parcial sem correção: 2,59 p.p.); a partir de 3%
+das seções o resultado final ficou sempre dentro da faixa. Aplicar a curva do 1º turno direto no total do Brasil
+erraria ~3 p.p. e por isso não é usado. É um único teste e não garante o mesmo desempenho em 2026.
+
 ## Limitações
 
 * Na série de parciais publicadas do Brasil não há registro entre 47% e 70% das seções.

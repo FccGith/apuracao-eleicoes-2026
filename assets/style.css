@@ -135,3 +135,15 @@ h3 { font-size: 1rem; margin: 16px 0 6px; }
 #x-atual { white-space: nowrap; }
 #x-atual.ativo { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .bf-modo { font-size: .82rem; color: var(--text-muted); }
+.selo { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); border: 1px solid var(--axis); border-radius: 6px; padding: 1px 6px; vertical-align: middle; }
+.proj-c { margin: 10px 0 14px; }
+.proj-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.proj-num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.proj-escala { position: relative; height: 18px; background: var(--surface-2); border-radius: 9px; margin: 6px 0 4px; }
+.proj-faixa { position: absolute; top: 3px; bottom: 3px; border-radius: 6px; opacity: .55; min-width: 4px; }
+.proj-centro { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--text-primary); border-radius: 2px; }
+.proj-meio { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--axis); }
+.proj-info { font-size: .9rem; color: var(--text-secondary); margin: 6px 0; }
+.proj-met { font-size: .9rem; color: var(--text-secondary); }
+.proj-met summary { font-weight: 600; font-size: .92rem; }
+.proj-met li { margin: 6px 0; }

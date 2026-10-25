@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#141413">
 <meta name="description" content="Apuração do 2º turno da eleição presidencial de 2026 comparada ao 1º turno na mesma porcentagem de seções totalizadas, com dados do TSE.">
 <title>Apuração 2026 · 1º × 2º turno por seções totalizadas</title>
-<link rel="stylesheet" href="assets/style.css?v=6">
+<link rel="stylesheet" href="assets/style.css?v=7">
 </head>
 <body>
 <main>
@@ -27,6 +27,11 @@
     <h2 id="t-agora">2º turno agora <span id="local2" class="muted"></span></h2>
     <div id="progresso2" class="progresso"></div>
     <div id="cands2" class="cands"></div>
+  </section>
+
+  <section class="card" aria-labelledby="t-proj">
+    <h2 id="t-proj">Estimativa do resultado final <span class="selo">não oficial</span> <span id="local3" class="muted"></span></h2>
+    <div id="proj"></div>
   </section>
 
   <section class="card" aria-labelledby="t-graf">
@@ -83,6 +88,7 @@
         <li><strong>2º turno</strong>: parciais publicadas pelo TSE, lidas pelo navegador a cada 30 s e gravadas para todas as UFs pelo coletor do repositório (GitHub Actions). Pontos de quando a página estava fechada vêm do coletor ou do Placar do Voto.</li>
         <li><strong>Brancos, nulos e abstenção</strong>: campos de cada parcial do TSE (<code>v.vb</code>, <code>v.tvn</code>, <code>e.c</code>, <code>e.a</code>); no 1º turno reconstruído, somados por seção e conferidos com o total oficial. Nulos incluem votos em candidatura anulada, como no TSE.</li>
         <li><strong>Saldo dos votos</strong>: diferença entre os turnos na fatia do eleitorado (comparecimento + abstenção das seções totalizadas) de cada categoria. É um saldo líquido, não a migração individual de eleitores.</li>
+        <li><strong>Estimativa do resultado final</strong> (não oficial): faixa entre dois métodos — parcial de cada UF ponderada pelo peso da UF, e a mesma parcial corrigida pela curva do 1º turno da UF. Testada com a apuração real do 2º turno de 2022 (<code>data/projecao/backtest-2022.json</code>): erro médio de 0,38 p.p. no centro da faixa.</li>
         <li>Quando os registros dos dois turnos não caem na mesma porcentagem, o valor do 1º turno é <strong>interpolado</strong> linearmente e marcado com “≈”. Os registros originais ficam preservados nos arquivos JSON.</li>
         <li>A mesma porcentagem de seções não significa as mesmas localidades: a ordem de chegada das seções muda de uma eleição para outra.</li>
         <li>Os horários do 1º turno reconstruído são os da totalização no TSE; a publicação do arquivo de parcial ocorria alguns minutos depois.</li>
@@ -106,6 +112,6 @@
     </div>
   </div>
 </div>
-<script src="assets/app.js?v=6"></script>
+<script src="assets/app.js?v=7"></script>
 </body>
 </html>
