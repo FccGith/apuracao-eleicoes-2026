@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#141413">
 <meta name="description" content="Apuração do 2º turno da eleição presidencial de 2026 comparada ao 1º turno na mesma porcentagem de seções totalizadas, com dados do TSE.">
 <title>Apuração 2026 · 1º × 2º turno por seções totalizadas</title>
-<link rel="stylesheet" href="assets/style.css?v=3">
+<link rel="stylesheet" href="assets/style.css?v=4">
 </head>
 <body>
 <main>
@@ -54,6 +54,12 @@
     <div id="leitura" class="leitura" aria-live="polite"></div>
   </section>
 
+  <section class="card" aria-labelledby="t-saldo">
+    <h2 id="t-saldo">Brancos, nulos, abstenção e saldo dos votos</h2>
+    <p class="muted">No mesmo ponto escolhido no gráfico (<span id="x-val2">—</span> das seções).</p>
+    <div id="saldo"></div>
+  </section>
+
   <section class="card" aria-labelledby="t-tab">
     <details>
       <summary id="t-tab">Tabela: 1º × 2º turno a cada 5% das seções</summary>
@@ -77,6 +83,8 @@
         <li><strong>1º turno – reconstrução oficial</strong> (todas as UFs): a partir dos dados abertos do TSE por seção (<code>detalhe_votacao_secao_2026</code> e <code>votacao_secao_2026_BR</code>). Cada seção entra na curva no instante em que foi incluída pela primeira vez numa totalização parcial (<code>DT_PRIM_TOT_PARCIAL_HOR_TSE</code>). Um ponto a cada 0,25% das seções. O resultado final de cada UF confere voto a voto com o TSE. Comparada às 282 parciais nacionais publicadas na noite da apuração, a diferença média foi de 0,005 ponto percentual (máxima 0,14).</li>
         <li><strong>1º turno – parciais publicadas</strong> (só Brasil): arquivos nacionais do TSE gravados em tempo real por arquivos públicos independentes (pedreirorr/painel-eleicao-2026 e Placar do Voto). Há um intervalo sem registros nacionais entre 47% e 70% das seções. Parciais históricas publicadas por UF não foram encontradas em nenhuma fonte verificável; por isso as UFs usam a reconstrução.</li>
         <li><strong>2º turno</strong>: parciais publicadas pelo TSE, lidas pelo navegador a cada 30 s e gravadas para todas as UFs pelo coletor do repositório (GitHub Actions). Pontos de quando a página estava fechada vêm do coletor ou do Placar do Voto.</li>
+        <li><strong>Brancos, nulos e abstenção</strong>: campos de cada parcial do TSE (<code>v.vb</code>, <code>v.tvn</code>, <code>e.c</code>, <code>e.a</code>); no 1º turno reconstruído, somados por seção e conferidos com o total oficial. Nulos incluem votos em candidatura anulada, como no TSE.</li>
+        <li><strong>Saldo dos votos</strong>: diferença entre os turnos na fatia do eleitorado (comparecimento + abstenção das seções totalizadas) de cada categoria. É um saldo líquido, não a migração individual de eleitores.</li>
         <li>Quando os registros dos dois turnos não caem na mesma porcentagem, o valor do 1º turno é <strong>interpolado</strong> linearmente e marcado com “≈”. Os registros originais ficam preservados nos arquivos JSON.</li>
         <li>A mesma porcentagem de seções não significa as mesmas localidades: a ordem de chegada das seções muda de uma eleição para outra.</li>
         <li>Os horários do 1º turno reconstruído são os da totalização no TSE; a publicação do arquivo de parcial ocorria alguns minutos depois.</li>
@@ -89,6 +97,6 @@
     Código e dados: <a href="https://github.com/FccGith/apuracao-eleicoes-2026">github.com/FccGith/apuracao-eleicoes-2026</a>
   </footer>
 </main>
-<script src="assets/app.js?v=3"></script>
+<script src="assets/app.js?v=4"></script>
 </body>
 </html>

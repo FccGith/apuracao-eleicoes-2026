@@ -60,7 +60,11 @@ def main():
             continue
         k = (row[ix["SG_UF"]].lower(), row[ix["CD_MUNICIPIO"]], row[ix["NR_ZONA"]], row[ix["NR_SECAO"]])
         t = datetime.datetime.strptime(row[ix["DT_PRIM_TOT_PARCIAL_HOR_TSE"]], "%d/%m/%Y %H:%M:%S")
-        secoes[k] = [t, collections.Counter()]
+        extra = collections.Counter({
+            "apt": int(row[ix["QT_APTOS"]]), "c": int(row[ix["QT_COMPARECIMENTO"]]), "a": int(row[ix["QT_ABSTENCOES"]]),
+            "b": int(row[ix["QT_VOTOS_BRANCOS"]]),
+        })
+        secoes[k] = [t, collections.Counter(), extra]
 
     ix, r = ler_csv(votacao)
     for row in r:
@@ -70,6 +74,8 @@ def main():
         n = row[ix["NR_VOTAVEL"]]
         if n in validos:
             secoes[k][1][n] += int(row[ix["QT_VOTOS"]])
+        elif n != "95":  # voto nulo (96) e votos de candidaturas anuladas: o TSE soma tudo em "nulos"
+            secoes[k][2]["n"] += int(row[ix["QT_VOTOS"]])
 
     grupos = collections.defaultdict(list)
     for k, s in secoes.items():
@@ -83,11 +89,13 @@ def main():
         ts_oficial = int(final[uf]["s"]["ts"])
         assert total == ts_oficial, (uf, total, ts_oficial)
         acum = collections.Counter()
+        acx = collections.Counter()
         pontos, prox, i = [], PASSO, 0
         while i < total:
             t = lista[i][0]
             while i < total and lista[i][0] == t:  # inclui todas as seções do mesmo instante
                 acum.update(lista[i][1])
+                acx.update(lista[i][2])
                 i += 1
             pst = 100 * i / total
             if pst + 1e-9 >= prox or i == total:
@@ -96,6 +104,7 @@ def main():
                     "t": t.strftime("%Y-%m-%dT%H:%M:%S-03:00"),
                     "st": i, "pst": round(pst, 4), "vv": vv,
                     "v": [acum[n] for n in validos],
+                    "apt": acx["apt"], "c": acx["c"], "a": acx["a"], "b": acx["b"], "n": acx["n"],
                 })
                 while prox <= pst + 1e-9:
                     prox += PASSO
@@ -104,6 +113,10 @@ def main():
         for j, n in enumerate(validos):
             assert pontos[-1]["v"][j] == cf[n]["votos"], (uf, n, pontos[-1]["v"][j], cf[n]["votos"])
         assert pontos[-1]["vv"] == int(final[uf]["v"]["vv"]), (uf, pontos[-1]["vv"], final[uf]["v"]["vv"])
+        fe, fv, u = final[uf]["e"], final[uf]["v"], pontos[-1]
+        conf = {"apt": fe["est"], "c": fe["c"], "a": fe["a"], "b": fv["vb"], "n": fv["tvn"]}
+        for campo, oficial in conf.items():
+            assert u[campo] == int(oficial), (uf, campo, u[campo], oficial)
         doc = {
             "turno": 1, "eleicao": "6257", "abrangencia": uf,
             "tipo": "reconstruido",
@@ -116,6 +129,7 @@ def main():
                 TSE.format(uf=uf),
             ],
             "secoes": total, "passo": PASSO,
+            "campos": {"apt": "eleitorado das seções totalizadas", "c": "comparecimento", "a": "abstenção", "b": "votos brancos", "n": "votos nulos (inclui anulados)"},
             "candidatos": [{"numero": n, "nome": cands_br[n]["nome"]} for n in validos],
             "pontos": pontos,
         }

@@ -62,7 +62,7 @@ function deArquivo(doc, fonte) {
     const v = {};
     nums.forEach((n, i) => { v[n] = Number(p.v[i]) || 0; });
     const tot = p.ts || ts;
-    return { x: tot ? 100 * p.st / tot : p.pst, st: p.st, ts: tot, vv: p.vv, v, t: p.t, fonte: p.fonte || fonte, arquivo: p.arquivo };
+    return { x: tot ? 100 * p.st / tot : p.pst, st: p.st, ts: tot, vv: p.vv, v, t: p.t, fonte: p.fonte || fonte, arquivo: p.arquivo, ...extras(p) };
   });
   return { cands: doc.candidatos.map(c => ({ numero: String(c.numero), nome: c.nome })), pontos: valida(pontos) };
 }
@@ -71,6 +71,13 @@ function valida(pontos) {
   return pontos.filter(p => Number.isFinite(p.x) && p.st > 0 && p.ts > 0 && p.st <= p.ts && p.vv >= 0 &&
     Math.abs(Object.values(p.v).reduce((a, b) => a + b, 0) - p.vv) <= Math.max(1, p.vv * 1e-6))
     .sort((a, b) => a.st - b.st);
+}
+
+// eleitorado das seções totalizadas, comparecimento, abstenção, brancos, nulos: só quando a fonte informa
+function extras(p) {
+  const o = {};
+  for (const k of ['apt', 'c', 'a', 'b', 'n']) if (Number.isFinite(p[k]) && p[k] >= 0) o[k] = p[k];
+  return (o.c > 0 && 'a' in o && 'b' in o && 'n' in o && o.c >= p.vv + o.b + o.n - 1) ? o : {};
 }
 
 const inteiro = x => parseInt(String(x ?? 0).replace(/\./g, ''), 10) || 0;
@@ -87,7 +94,8 @@ function deTSE(d) {
   const st = inteiro(d.s?.st), ts = inteiro(d.s?.ts), vv = inteiro(d.v?.vv);
   let t = null;
   if (d.dt && d.ht) { const [dd, mm, aa] = d.dt.split('/'); t = `${aa}-${mm}-${dd}T${d.ht}-03:00`; }
-  const ponto = { x: ts ? 100 * st / ts : 0, st, ts, vv, v, t, fonte: 'tse' };
+  const ponto = { x: ts ? 100 * st / ts : 0, st, ts, vv, v, t, fonte: 'tse',
+    ...extras({ vv, apt: inteiro(d.e?.est), c: inteiro(d.e?.c), a: inteiro(d.e?.a), b: inteiro(d.v?.vb), n: inteiro(d.v?.tvn) }) };
   return { cands, ponto, ts, finalizado: d.tf === 's', geradoEm: d.dg && d.hg ? d.dg + ' ' + d.hg : null };
 }
 
@@ -163,7 +171,7 @@ const perc = (p, n) => p.vv > 0 ? 100 * (p.v[n] || 0) / p.vv : null;
 const percOutros = p => p.vv > 0 ? 100 * (p.vv - PRINCIPAIS.reduce((a, n) => a + (p.v[n] || 0), 0)) / p.vv : null;
 
 function valorEm(pontos, x, fn) {
-  const pts = pontos.filter(p => p.vv > 0);
+  const pts = pontos.filter(p => p.vv > 0 && fn(p) != null);
   if (!pts.length || x < pts[0].x - 1e-9 || x > pts[pts.length - 1].x + 1e-9) return null;
   let i = pts.findIndex(p => p.x >= x - 1e-9);
   const b = pts[i];
@@ -315,7 +323,7 @@ function desenhar() {
 let rafLeve = 0;
 function desenharTudoLeve() {
   cancelAnimationFrame(rafLeve);
-  rafLeve = requestAnimationFrame(() => { desenhar(); leitura(); });
+  rafLeve = requestAnimationFrame(() => { desenhar(); leitura(); saldo(); });
 }
 
 function desenharLegenda(linhas) {
@@ -331,7 +339,7 @@ function desenharLegenda(linhas) {
 /* ---------- leitura no ponto escolhido ---------- */
 function leitura() {
   const x = estado.x;
-  $('x-val').textContent = pct(x);
+  $('x-val').textContent = pct(x); $('x-val2').textContent = pct(x);
   const s1 = serie1(), s2 = estado.t2;
   const nums = [...PRINCIPAIS, ...($('outros').checked ? ['outros'] : [])];
   const notas = [];
@@ -358,6 +366,76 @@ function leitura() {
   if (!s2 || !s2.pontos.length) notas.push('2º turno: ainda não há parciais publicadas pelo TSE.');
   $('leitura').innerHTML = `<table><thead><tr><th>Em ${pct(x)} das seções</th><th class="n">1º turno</th><th class="n">2º turno</th><th class="n">Diferença</th></tr></thead><tbody>${linhas.join('')}</tbody></table>` +
     notas.map(t => `<p class="nota">${t}</p>`).join('');
+}
+
+/* ---------- brancos, nulos, abstenção e saldo dos votos ---------- */
+const temExtra = p => p.c != null && p.a != null;
+const eleit = p => p.c + p.a; // base que soma 100%: quem votou + quem se absteve
+const CATS = [
+  { k: '22', nome: () => nomeCand('22'), cor: () => cor('22'), votos: p => p.v['22'] || 0 },
+  { k: '13', nome: () => nomeCand('13'), cor: () => cor('13'), votos: p => p.v['13'] || 0 },
+  { k: 'outros', nome: () => 'Demais candidatos', cor: () => cor('outros'), votos: p => p.vv - (p.v['22'] || 0) - (p.v['13'] || 0) },
+  { k: 'b', nome: () => 'Brancos', votos: p => p.b },
+  { k: 'n', nome: () => 'Nulos', votos: p => p.n },
+  { k: 'a', nome: () => 'Abstenção (não foram votar)', votos: p => p.a },
+];
+const sinal = d => (d >= 0 ? '+' : '−') + f2.format(Math.abs(d));
+
+function saldo() {
+  const x = estado.x, s1 = serie1(), s2 = estado.t2;
+  const box = $('saldo');
+  const fnE = c => p => temExtra(p) && eleit(p) > 0 ? 100 * c.votos(p) / eleit(p) : null;
+  const tem1 = s1 && s1.pontos.some(temExtra);
+  if (!tem1) {
+    box.innerHTML = '<p class="muted">A série “parciais publicadas” do 1º turno não traz brancos, nulos e abstenção. Escolha “Reconstrução oficial por seção” para ver este quadro.</p>';
+    return;
+  }
+  const r1 = CATS.map(c => valorEm(s1.pontos, x, fnE(c)));
+  const pts2 = s2 && s2.pontos.length ? s2.pontos : [];
+  const r2 = CATS.map(c => c.k === 'outros' ? null : pts2.length ? valorEm(pts2, x, fnE(c)) : null);
+  // no 2º turno não há "demais candidatos": a categoria vale 0
+  if (pts2.length && r2[0]?.y != null) r2[2] = { y: 0, exato: r2[0].exato };
+  // TSE: brancos e nulos sobre o comparecimento; abstenção sobre o eleitorado
+  const conv = (pts, f) => pts && pts.length ? valorEm(pts, x, f) : null;
+  const tse = [
+    ['Brancos', p => temExtra(p) && p.c ? 100 * p.b / p.c : null, 'dos votos'],
+    ['Nulos', p => temExtra(p) && p.c ? 100 * p.n / p.c : null, 'dos votos'],
+    ['Abstenção', p => temExtra(p) && eleit(p) ? 100 * p.a / eleit(p) : null, 'do eleitorado'],
+  ];
+  const v = r => !r || r.y == null ? '—' : (r.exato ? '' : '≈') + pct(r.y);
+  let h = `<table class="t-saldo"><thead><tr><th>Em ${pct(x)} das seções</th><th class="n">1º turno</th><th class="n">2º turno</th></tr></thead><tbody>` +
+    tse.map(([nome, f, base]) => `<tr><th>${nome} <span class="muted">(% ${base})</span></th><td class="n">${v(conv(s1.pontos, f))}</td><td class="n">${v(conv(pts2, f))}</td></tr>`).join('') +
+    '</tbody></table>';
+
+  h += `<h3>Composição do eleitorado das seções totalizadas</h3><table class="t-saldo"><thead><tr><th></th><th class="n">1º turno</th><th class="n">2º turno</th><th class="n">Saldo</th></tr></thead><tbody>` +
+    CATS.map((c, i) => {
+      const d = r1[i]?.y != null && r2[i]?.y != null ? r2[i].y - r1[i].y : null;
+      const dot = c.cor ? `<i class="dot" style="--c:${c.cor()}"></i>` : '<i class="dot" style="--c:var(--text-muted);opacity:.4"></i>';
+      return `<tr><th>${dot}${c.nome()}</th><td class="n">${v(r1[i])}</td><td class="n">${v(r2[i])}</td><td class="n">${d == null ? '—' : sinal(d) + ' p.p.'}</td></tr>`;
+    }).join('') + '</tbody></table>';
+
+  const ok = r1.every(r => r?.y != null) && r2.every(r => r?.y != null);
+  if (ok) {
+    const demais = r1[2].y;
+    const ganhos = CATS.map((c, i) => ({ c, d: r2[i].y - r1[i].y })).filter(g => g.c.k !== 'outros');
+    const pos = ganhos.filter(g => g.d > 0), somaPos = pos.reduce((a, g) => a + g.d, 0);
+    h += `<h3>Para onde foi o saldo</h3><p>No 1º turno, os demais candidatos tinham <strong>${pct(demais)}</strong> do eleitorado nestas seções. ` +
+      `No 2º turno, as categorias que cresceram somam <strong>${pct(somaPos)}</strong> do eleitorado:</p><div class="barras">` +
+      pos.sort((a, b) => b.d - a.d).map(g => `<div class="barra-l"><span class="rot">${g.c.nome()}</span><span class="trilho"><span style="width:${Math.max(1, 100 * g.d / somaPos)}%;background:${g.c.cor ? g.c.cor() : 'var(--text-muted)'}"></span></span><span class="val">${sinal(g.d)} p.p. · ${f0.format(100 * g.d / somaPos)}%</span></div>`).join('') + '</div>';
+    const neg = ganhos.filter(g => g.d < 0);
+    if (neg.length) h += `<p class="muted">Diminuíram: ${neg.map(g => `${g.c.nome()} ${sinal(g.d)} p.p.`).join('; ')}</p>`;
+    const u1 = s1.pontos[s1.pontos.length - 1], u2 = pts2[pts2.length - 1];
+    if (x >= 100 - 1e-9 && u2 && u2.st >= u2.ts && temExtra(u1) && temExtra(u2)) {
+      h += `<h3>Resultado final em votos</h3><table class="t-saldo"><thead><tr><th></th><th class="n">1º turno</th><th class="n">2º turno</th><th class="n">Diferença</th></tr></thead><tbody>` +
+        CATS.map(c => { const a = c.votos(u1), b = c.k === 'outros' ? 0 : c.votos(u2); return `<tr><th>${c.nome()}</th><td class="n">${f0.format(a)}</td><td class="n">${f0.format(b)}</td><td class="n">${(b - a >= 0 ? '+' : '−') + f0.format(Math.abs(b - a))}</td></tr>`; }).join('') + '</tbody></table>';
+    }
+  } else if (!pts2.length) {
+    h += '<p class="muted">O saldo aparece quando o TSE publicar as parciais do 2º turno.</p>';
+  } else {
+    h += `<p class="muted">O 2º turno ainda não chegou a ${pct(x)} das seções (ou a parcial não traz esses campos).</p>`;
+  }
+  h += '<p class="nota muted">O saldo é líquido: mostra quanto cada categoria cresceu ou diminuiu entre os turnos, como fração do eleitorado das seções totalizadas. Não é a migração de cada eleitor (o voto é secreto): parte do crescimento de um candidato pode vir de quem votou no adversário, em branco ou se absteve no 1º turno, e vice-versa. Na mesma % de seções, as seções totalizadas nos dois turnos não são necessariamente as mesmas.</p>';
+  box.innerHTML = h;
 }
 
 /* ---------- cartões do 2º turno, tabela e fontes ---------- */
@@ -465,7 +543,7 @@ async function atualizar() {
   }
 }
 
-function render() { desenhar(); leitura(); cartoes(); tabela(); fontes(); relogio(); }
+function render() { desenhar(); leitura(); saldo(); cartoes(); tabela(); fontes(); relogio(); }
 
 function iniciar() {
   const sel = $('uf');
@@ -483,7 +561,7 @@ function iniciar() {
   $('atualizar').onclick = () => atualizar();
   $('serie1').onchange = () => render();
   $('escala').onchange = () => desenhar();
-  $('outros').onchange = () => { desenhar(); leitura(); };
+  $('outros').onchange = () => { desenhar(); leitura(); saldo(); };
   $('x').oninput = () => { estado.x = Number($('x').value); estado.xManual = true; desenharTudoLeve(); };
   let rz = 0;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(desenhar, 120); });

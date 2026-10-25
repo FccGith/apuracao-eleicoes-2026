@@ -108,3 +108,15 @@ footer { text-align: center; margin: 16px 0; }
   .card { padding: 12px; }
   .cand .pct { font-size: 1.4rem; }
 }
+
+h3 { font-size: 1rem; margin: 16px 0 6px; }
+.t-saldo { border-collapse: collapse; width: 100%; font-size: .92rem; font-variant-numeric: tabular-nums; }
+.t-saldo th, .t-saldo td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--grid); font-weight: normal; }
+.t-saldo thead th { font-weight: 600; }
+.t-saldo td.n, .t-saldo th.n { text-align: right; white-space: nowrap; }
+.barras { display: grid; gap: 8px; margin: 8px 0; }
+.barra-l { display: grid; grid-template-columns: minmax(90px, 1.3fr) 2fr auto; gap: 8px; align-items: center; font-size: .9rem; }
+.barra-l .trilho { height: 12px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.barra-l .trilho span { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.barra-l .val { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-secondary); }
+@media (max-width: 520px) { .barra-l { grid-template-columns: 1fr auto; } .barra-l .trilho { grid-column: 1 / -1; grid-row: 2; } }

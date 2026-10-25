@@ -57,7 +57,7 @@ def ponto(d):
                 cands.append({"numero": c["n"], "nome": (c.get("nmu") or c.get("nm") or "").title(),
                               "votos": inteiro(c.get("vap")), "valido": c.get("dvt", "Válido") != "Anulado"})
     cands.sort(key=lambda c: c["numero"])
-    s, v = d.get("s", {}), d.get("v", {})
+    s, v, e = d.get("s", {}), d.get("v", {}), d.get("e", {})
     dt, ht = d.get("dt") or "", d.get("ht") or ""
     t = None
     if dt and ht:
@@ -68,6 +68,9 @@ def ponto(d):
         "st": inteiro(s.get("st")), "ts": inteiro(s.get("ts")),
         "pst": float(str(s.get("pstn") or s.get("pst") or 0).replace(",", ".")),
         "vv": inteiro(v.get("vv")), "candidatos": cands, "final": d.get("tf") == "s",
+        # eleitorado das seções totalizadas, comparecimento, abstenção, brancos e nulos (inclui anulados)
+        "apt": inteiro(e.get("est")), "c": inteiro(e.get("c")), "a": inteiro(e.get("a")),
+        "b": inteiro(v.get("vb")), "n": inteiro(v.get("tvn")),
     }
 
 
@@ -121,7 +124,8 @@ def main():
                 validos = [c for c in p["candidatos"] if c["valido"]]
                 doc["candidatos"] = [{"numero": c["numero"], "nome": c["nome"]} for c in validos]
                 doc["pontos"].append({"t": p["t"], "lido": p["lido"], "st": p["st"], "ts": p["ts"],
-                                      "pst": p["pst"], "vv": p["vv"], "v": [c["votos"] for c in validos]})
+                                      "pst": p["pst"], "vv": p["vv"], "v": [c["votos"] for c in validos],
+                                      "apt": p["apt"], "c": p["c"], "a": p["a"], "b": p["b"], "n": p["n"]})
                 with open(os.path.join(DADOS_DIR, "turno2", f"{uf}.json"), "w", encoding="utf-8") as f:
                     json.dump(doc, f, ensure_ascii=False, separators=(",", ":"))
                 pendente = True
