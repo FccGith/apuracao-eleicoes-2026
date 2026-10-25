@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#141413">
 <meta name="description" content="Apuração do 2º turno da eleição presidencial de 2026 comparada ao 1º turno na mesma porcentagem de seções totalizadas, com dados do TSE.">
 <title>Apuração 2026 · 1º × 2º turno por seções totalizadas</title>
-<link rel="stylesheet" href="assets/style.css?v=5">
+<link rel="stylesheet" href="assets/style.css?v=6">
 </head>
 <body>
 <main>
@@ -97,15 +97,15 @@
 </main>
 <div class="barra-fixa" role="group" aria-label="Ponto de comparação">
   <div class="bf-in">
-    <label for="x" class="bf-rot">Comparar em <output id="x-val">—</output> das seções <span id="x-resumo" class="bf-resumo"></span></label>
+    <label for="x" class="bf-rot">Comparar em <output id="x-val">—</output> das seções <span id="x-modo" class="bf-modo"></span> <span id="x-resumo" class="bf-resumo"></span></label>
     <div class="bf-linha">
       <button type="button" id="x-menos" aria-label="Diminuir 1 ponto">−</button>
       <input type="range" id="x" min="0" max="100" step="0.25" value="100">
       <button type="button" id="x-mais" aria-label="Aumentar 1 ponto">+</button>
-      <button type="button" id="x-atual" title="Voltar ao ponto mais recente do 2º turno">Atual</button>
+      <button type="button" id="x-atual" aria-pressed="true">● Ao vivo</button>
     </div>
   </div>
 </div>
-<script src="assets/app.js?v=5"></script>
+<script src="assets/app.js?v=6"></script>
 </body>
 </html>

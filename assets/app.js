@@ -30,7 +30,7 @@ const hora = (iso) => {
 };
 
 const estado = {
-  uf: 'br', t1: {}, t2: null, fontes: {}, x: 100, xManual: false,
+  uf: 'br', t1: {}, t2: null, fontes: {}, x: 100, xManual: false, tocouEm: 0,
   ultima: null, proxima: 0, carregando: false
 };
 
@@ -311,7 +311,7 @@ function desenhar() {
     const rect = svg.getBoundingClientRect();
     const px = (ev.clientX - rect.left) * (W / rect.width);
     const x = Math.max(0, Math.min(100, Math.round((px - M.l) / pw * 400) / 4));
-    if (x !== estado.x) { estado.x = x; estado.xManual = true; $('x').value = x; desenharTudoLeve(); }
+    if (x !== estado.x) { estado.x = x; manual(); $('x').value = x; desenharTudoLeve(); }
   };
   alvo.addEventListener('pointerdown', ev => { mover(ev); });
   alvo.addEventListener('pointermove', ev => { if (ev.pointerType === 'mouse' || ev.buttons) mover(ev); });
@@ -525,7 +525,7 @@ async function atualizar() {
     if (uf !== estado.uf) return; // usuário trocou de abrangência no meio da consulta
     estado.t2 = t2;
     estado.fontes = { ...estado.fontes, ...t2.fontes };
-    if (!estado.xManual) estado.x = t2.pontos.length ? t2.pontos[t2.pontos.length - 1].x : 100;
+    if (!estado.xManual) estado.x = pontoAtual();
     $('x').value = estado.x;
     const s1 = serie1();
     const falhas = Object.entries(t2.fontes).filter(([, v]) => !v.ok).map(([k]) => k);
@@ -547,7 +547,25 @@ async function atualizar() {
   }
 }
 
-function render() { desenhar(); leitura(); saldo(); cartoes(); tabela(); fontes(); relogio(); }
+/* ---------- linha de comparação: ao vivo (segue o 2º turno) ou manual ---------- */
+const VOLTA_AO_VIVO = 60000; // após 60 s sem mexer, a linha volta a acompanhar a apuração
+const pontoAtual = () => { const p = estado.t2?.pontos || []; return p.length ? p[p.length - 1].x : 100; };
+function botaoAoVivo() {
+  const b = $('x-atual');
+  b.setAttribute('aria-pressed', String(!estado.xManual));
+  b.classList.toggle('ativo', !estado.xManual);
+  const falta = Math.max(0, Math.ceil((VOLTA_AO_VIVO - (Date.now() - estado.tocouEm)) / 1000));
+  b.textContent = estado.xManual ? 'Ao vivo' : '● Ao vivo';
+  b.title = estado.xManual ? `Voltar a acompanhar o 2º turno (automático em ${falta} s)` : 'Acompanhando a parcial mais recente do 2º turno';
+  const tem2 = (estado.t2?.pontos || []).length > 0;
+  $('x-modo').textContent = !estado.xManual
+    ? (tem2 ? '· acompanhando o 2º turno' : '· 2º turno ainda sem parciais (mostrando o final do 1º turno)')
+    : `· escolhido por você; volta ao vivo em ${falta} s`;
+}
+function manual() { estado.xManual = true; estado.tocouEm = Date.now(); botaoAoVivo(); }
+function aoVivo() { estado.xManual = false; estado.x = pontoAtual(); $('x').value = estado.x; botaoAoVivo(); desenharTudoLeve(); }
+
+function render() { desenhar(); leitura(); saldo(); cartoes(); tabela(); fontes(); relogio(); botaoAoVivo(); }
 
 function iniciar() {
   const sel = $('uf');
@@ -557,7 +575,7 @@ function iniciar() {
   sel.value = estado.uf;
   $('op-serie1').hidden = estado.uf !== 'br';
   sel.onchange = () => {
-    estado.uf = sel.value; estado.t2 = null; estado.xManual = false;
+    estado.uf = sel.value; estado.t2 = null; estado.xManual = false; botaoAoVivo();
     $('op-serie1').hidden = estado.uf !== 'br';
     history.replaceState(null, '', '#' + estado.uf);
     render(); atualizar();
@@ -566,19 +584,17 @@ function iniciar() {
   $('serie1').onchange = () => render();
   $('escala').onchange = () => desenhar();
   $('outros').onchange = () => { desenhar(); leitura(); saldo(); };
-  $('x').oninput = () => { estado.x = Number($('x').value); estado.xManual = true; desenharTudoLeve(); };
-  const passo = d => { estado.x = Math.max(0, Math.min(100, Math.round((estado.x + d) * 4) / 4)); estado.xManual = true; $('x').value = estado.x; desenharTudoLeve(); };
+  $('x').oninput = () => { estado.x = Number($('x').value); manual(); desenharTudoLeve(); };
+  const passo = d => { estado.x = Math.max(0, Math.min(100, Math.round((estado.x + d) * 4) / 4)); manual(); $('x').value = estado.x; desenharTudoLeve(); };
   $('x-menos').onclick = () => passo(-1);
   $('x-mais').onclick = () => passo(1);
-  $('x-atual').onclick = () => {
-    const pts = estado.t2?.pontos || [];
-    estado.xManual = false; estado.x = pts.length ? pts[pts.length - 1].x : 100; $('x').value = estado.x; desenharTudoLeve();
-  };
+  $('x-atual').onclick = () => aoVivo();
   let rz = 0;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(desenhar, 120); });
   matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => render());
   setInterval(() => {
     relogio();
+    if (estado.xManual && Date.now() - estado.tocouEm > VOLTA_AO_VIVO) aoVivo(); else botaoAoVivo();
     if (Date.now() >= estado.proxima && !document.hidden && estado.ultima) atualizar();
   }, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() >= estado.proxima) atualizar(); });

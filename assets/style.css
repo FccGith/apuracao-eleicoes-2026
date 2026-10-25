@@ -132,3 +132,6 @@ h3 { font-size: 1rem; margin: 16px 0 6px; }
 .barra-l .trilho span { display: block; height: 100%; border-radius: 0 4px 4px 0; }
 .barra-l .val { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-secondary); }
 @media (max-width: 520px) { .barra-l { grid-template-columns: 1fr auto; } .barra-l .trilho { grid-column: 1 / -1; grid-row: 2; } }
+#x-atual { white-space: nowrap; }
+#x-atual.ativo { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.bf-modo { font-size: .82rem; color: var(--text-muted); }
