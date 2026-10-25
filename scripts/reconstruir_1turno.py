@@ -11,13 +11,15 @@ Fontes (dadosabertos.tse.jus.br, conjunto "resultados-2026"):
 Para cada abrangência, as seções são ordenadas pelo instante da primeira totalização parcial.
 Em cada instante T, o conjunto totalizado é exatamente o das seções com horário <= T, e os
 percentuais são calculados sobre os votos válidos desse conjunto. Um ponto é gravado no primeiro
-instante em que a fração de seções totalizadas atinge cada passo de PASSO pontos percentuais.
+instante em que a fração de seções totalizadas atinge cada passo: PASSO_INICIO até LIMITE_INICIO% das seções,
+depois PASSO pontos percentuais.
 
 Uso: python3 -I reconstruir_1turno.py <detalhe.csv> <votacao.csv> <pasta_saida>
 """
 import csv, json, os, sys, urllib.request, datetime, collections
 
 PASSO = 0.25
+PASSO_INICIO, LIMITE_INICIO = 0.05, 5.0  # mais detalhe no começo da apuração, onde a curva muda mais
 TSE = "https://resultados.tse.jus.br/oficial/ele2026/6257/dados/{uf}/{uf}-c0001-e006257-u.json"
 UFS = ["ac", "al", "am", "ap", "ba", "ce", "df", "es", "go", "ma", "mg", "ms", "mt", "pa", "pb", "pe",
        "pi", "pr", "rj", "rn", "ro", "rr", "rs", "sc", "se", "sp", "to", "zz"]
@@ -90,7 +92,7 @@ def main():
         assert total == ts_oficial, (uf, total, ts_oficial)
         acum = collections.Counter()
         acx = collections.Counter()
-        pontos, prox, i = [], PASSO, 0
+        pontos, prox, i = [], PASSO_INICIO, 0
         while i < total:
             t = lista[i][0]
             while i < total and lista[i][0] == t:  # inclui todas as seções do mesmo instante
@@ -107,7 +109,7 @@ def main():
                     "apt": acx["apt"], "c": acx["c"], "a": acx["a"], "b": acx["b"], "n": acx["n"],
                 })
                 while prox <= pst + 1e-9:
-                    prox += PASSO
+                    prox = round(prox + (PASSO_INICIO if prox < LIMITE_INICIO - 1e-9 else PASSO), 4)
         # conferência com o resultado final oficial
         cf = candidatos_validos(final[uf])
         for j, n in enumerate(validos):
@@ -128,7 +130,7 @@ def main():
                 "https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_secao/votacao_secao_2026_BR.zip",
                 TSE.format(uf=uf),
             ],
-            "secoes": total, "passo": PASSO,
+            "secoes": total, "passo": PASSO, "passo_inicio": [PASSO_INICIO, LIMITE_INICIO],
             "campos": {"apt": "eleitorado das seções totalizadas", "c": "comparecimento", "a": "abstenção", "b": "votos brancos", "n": "votos nulos (inclui anulados)"},
             "candidatos": [{"numero": n, "nome": cands_br[n]["nome"]} for n in validos],
             "pontos": pontos,

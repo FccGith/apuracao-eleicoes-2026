@@ -215,6 +215,21 @@ function nomeCand(n) {
   return c ? c.nome : 'Nº ' + n;
 }
 
+/* ---------- zoom do eixo X ---------- */
+const ZOOMS = [2, 5, 10, 25, 50, 100];
+function janelaX() {
+  const z = $('zoom').value;
+  if (z !== 'auto') return [0, Number(z)];
+  const pts = estado.t2?.pontos || [];
+  if (!pts.length) return [0, 100];
+  const x = pts[pts.length - 1].x;
+  return [0, ZOOMS.find(v => v >= x * 1.25) || 100];
+}
+function passoBonito(bruto) {
+  return [0.1, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25].find(v => v >= bruto) || 25;
+}
+const fmtX = (v, passo) => (Number.isInteger(passo) ? f0.format(v) : (passo < 0.5 ? f2 : f1).format(v)) + '%';
+
 function desenhar() {
   const box = $('grafico');
   const W = Math.max(300, box.clientWidth || 300);
@@ -223,30 +238,37 @@ function desenhar() {
   const pw = W - M.l - M.r, ph = H - M.t - M.b;
   const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H });
   const linhas = linhasVisiveis();
+  const [xa, xb] = janelaX();
+  const naJanela = x => x >= xa - 1e-9 && x <= xb + 1e-9;
+  // a barra deslizante acompanha a janela do zoom
+  const sl = $('x'), passoSl = (xb - xa) <= 10 ? 0.05 : 0.25;
+  if (Number(sl.min) !== xa || Number(sl.max) !== xb) { sl.min = xa; sl.max = xb; sl.step = passoSl; sl.value = estado.x; }
 
   // escala Y
   let y0 = 0, y1 = 100;
   if ($('escala').value === 'auto') {
     const ys = [];
-    linhas.forEach(L => L.pontos.forEach(p => { if (p.x >= 1) { const y = L.fn(p); if (y != null) ys.push(y); } }));
+    const xmin = (xb - xa) >= 50 ? 1 : (xb - xa) * 0.1; // ignora o primeiríssimo trecho, muito instável
+    linhas.forEach(L => L.pontos.forEach(p => { if (naJanela(p.x) && p.x >= xmin) { const y = L.fn(p); if (y != null) ys.push(y); } }));
     if (ys.length) {
-      y0 = Math.max(0, Math.floor((Math.min(...ys) - 1) / 5) * 5);
-      y1 = Math.min(100, Math.ceil((Math.max(...ys) + 1) / 5) * 5);
-      if (y1 - y0 < 10) y1 = Math.min(100, y0 + 10);
+      const g = (Math.max(...ys) - Math.min(...ys)) > 15 ? 5 : 1; // zoom curto: grade de 1 ponto
+      y0 = Math.max(0, Math.floor((Math.min(...ys) - 0.5) / g) * g);
+      y1 = Math.min(100, Math.ceil((Math.max(...ys) + 0.5) / g) * g);
+      if (y1 - y0 < 4) y1 = Math.min(100, y0 + 4);
     }
   }
-  const X = x => M.l + x / 100 * pw;
+  const X = x => M.l + (x - xa) / (xb - xa) * pw;
   const Y = y => M.t + (y1 - y) / (y1 - y0) * ph;
-  const passoY = (y1 - y0) > 40 ? 20 : (y1 - y0) > 20 ? 10 : 5;
+  const passoY = passoBonito((y1 - y0) / 6);
   const grid = el('g', {}, svg);
   for (let v = y0; v <= y1 + 1e-9; v += passoY) {
     el('line', { x1: M.l, x2: W - M.r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)', 'stroke-width': 1 }, grid);
-    el('text', { x: M.l - 6, y: Y(v) + 4, 'text-anchor': 'end' }, grid).textContent = v + '%';
+    el('text', { x: M.l - 6, y: Y(v) + 4, 'text-anchor': 'end' }, grid).textContent = fmtX(v, passoY);
   }
-  const passoX = pw < 420 ? 25 : 10;
-  for (let v = 0; v <= 100; v += passoX) {
+  const passoX = passoBonito((xb - xa) / (pw < 420 ? 4 : 10));
+  for (let i = 0, v = xa; v <= xb + 1e-9; i++, v = xa + i * passoX) {
     el('line', { x1: X(v), x2: X(v), y1: M.t + ph, y2: M.t + ph + 4, stroke: 'var(--axis)' }, grid);
-    el('text', { x: X(v), y: M.t + ph + 18, 'text-anchor': v === 0 ? 'start' : v === 100 ? 'end' : 'middle' }, grid).textContent = v + '%';
+    el('text', { x: X(v), y: M.t + ph + 18, 'text-anchor': v === xa ? 'start' : Math.abs(v - xb) < 1e-9 ? 'end' : 'middle' }, grid).textContent = fmtX(v, passoX);
   }
   el('line', { x1: M.l, x2: W - M.r, y1: M.t + ph, y2: M.t + ph, stroke: 'var(--axis)' }, grid);
   el('text', { x: M.l + pw / 2, y: H - 4, 'text-anchor': 'middle' }, grid).textContent = 'seções totalizadas';
@@ -256,14 +278,17 @@ function desenhar() {
   }
 
   // linhas: quebra o traço onde há lacuna maior que LACUNA_MAX
-  const camada = el('g', { fill: 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  const defs = el('defs', {}, svg);
+  const clip = el('clipPath', { id: 'area-plot' }, defs);
+  el('rect', { x: M.l - 5, y: M.t - 5, width: pw + 10, height: ph + 10 }, clip);
+  const camada = el('g', { fill: 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'clip-path': 'url(#area-plot)' }, svg);
   for (const L of linhas) {
     let d = '', ant = null;
     for (const p of L.pontos) {
       const y = L.fn(p);
       if (y == null) { ant = null; continue; }
       const cmd = (!ant || p.x - ant.x > LACUNA_MAX) ? 'M' : 'L';
-      d += `${cmd}${X(p.x).toFixed(1)},${Y(Math.max(y0, Math.min(y1, y))).toFixed(1)}`;
+      d += `${cmd}${X(p.x).toFixed(1)},${Y(y).toFixed(1)}`;
       ant = p;
     }
     el('path', {
@@ -275,7 +300,7 @@ function desenhar() {
       L.pontos.forEach((p, i) => {
         const y = L.fn(p); if (y == null) return;
         const viz = [L.pontos[i - 1], L.pontos[i + 1]].some(q => q && Math.abs(q.x - p.x) <= LACUNA_MAX);
-        if (!viz || i === L.pontos.length - 1 && L.turno === 2) {
+        if (naJanela(p.x) && (!viz || i === L.pontos.length - 1 && L.turno === 2)) {
           el('circle', { cx: X(p.x), cy: Y(y), r: 4, fill: cor(L.n), stroke: 'var(--surface-1)', 'stroke-width': 2 }, svg);
         }
       });
@@ -284,7 +309,7 @@ function desenhar() {
   // rótulos diretos no fim de cada linha do turno mais recente visível
   const rotulos = [];
   for (const L of linhas) {
-    const ult = [...L.pontos].reverse().find(p => L.fn(p) != null);
+    const ult = [...L.pontos].reverse().find(p => L.fn(p) != null && naJanela(p.x));
     if (!ult) continue;
     const temT2 = linhas.some(o => o.turno === 2 && o.n === L.n);
     if (temT2 && L.turno === 1) continue;
@@ -300,9 +325,9 @@ function desenhar() {
 
   // cursor de comparação
   const cx = X(estado.x);
-  el('line', { x1: cx, x2: cx, y1: M.t, y2: M.t + ph, stroke: 'var(--text-secondary)', 'stroke-width': 1, 'stroke-dasharray': '2 3' }, svg);
+  if (naJanela(estado.x)) el('line', { x1: cx, x2: cx, y1: M.t, y2: M.t + ph, stroke: 'var(--text-secondary)', 'stroke-width': 1, 'stroke-dasharray': '2 3' }, svg);
   for (const L of linhas) {
-    const r = valorEm(L.pontos, estado.x, L.fn);
+    const r = naJanela(estado.x) ? valorEm(L.pontos, estado.x, L.fn) : null;
     if (r && r.y != null) el('circle', { cx, cy: Y(Math.max(y0, Math.min(y1, r.y))), r: 4.5, fill: L.turno === 2 ? cor(L.n) : 'var(--surface-1)', stroke: cor(L.n), 'stroke-width': 2 }, svg);
   }
   // área de toque/arraste
@@ -310,7 +335,8 @@ function desenhar() {
   const mover = ev => {
     const rect = svg.getBoundingClientRect();
     const px = (ev.clientX - rect.left) * (W / rect.width);
-    const x = Math.max(0, Math.min(100, Math.round((px - M.l) / pw * 400) / 4));
+    const bruto = xa + (px - M.l) / pw * (xb - xa);
+    const x = Math.max(xa, Math.min(xb, Math.round(bruto / passoSl) * passoSl));
     if (x !== estado.x) { estado.x = x; manual(); $('x').value = x; desenharTudoLeve(); }
   };
   alvo.addEventListener('pointerdown', ev => { mover(ev); });
@@ -734,9 +760,14 @@ function iniciar() {
   $('atualizar').onclick = () => atualizar();
   $('serie1').onchange = () => render();
   $('escala').onchange = () => desenhar();
+  $('zoom').onchange = () => {
+    const [a, b] = janelaX();
+    if (estado.x < a || estado.x > b) { estado.x = Math.min(b, Math.max(a, estado.x)); manual(); }
+    desenharTudoLeve();
+  };
   $('outros').onchange = () => { desenhar(); leitura(); saldo(); };
   $('x').oninput = () => { estado.x = Number($('x').value); manual(); desenharTudoLeve(); };
-  const passo = d => { estado.x = Math.max(0, Math.min(100, Math.round((estado.x + d) * 4) / 4)); manual(); $('x').value = estado.x; desenharTudoLeve(); };
+  const passo = d => { const [a, b] = janelaX(), s = (b - a) <= 10 ? 0.05 : 1; estado.x = Math.max(a, Math.min(b, Math.round((estado.x + d * s) / s) * s)); manual(); $('x').value = estado.x; desenharTudoLeve(); };
   $('x-menos').onclick = () => passo(-1);
   $('x-mais').onclick = () => passo(1);
   $('x-atual').onclick = () => aoVivo();
