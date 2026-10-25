@@ -81,10 +81,22 @@ button { cursor: pointer; }
 .grafico text { fill: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .grafico .rotulo { fill: var(--text-primary); font-size: 12px; font-weight: 600; }
 .grafico .vazio { fill: var(--text-secondary); font-size: 14px; }
-.slider { margin-top: 10px; display: block; }
-.slider input { display: block; margin-top: 4px; }
-.slider output { color: var(--text-primary); font-weight: 600; }
-input[type=range] { width: 100%; min-height: 36px; accent-color: var(--accent); }
+body { padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
+.dica { margin: 8px 0 0; }
+.barra-fixa {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--surface-1); border-top: 1px solid var(--grid);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, .18);
+  padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.bf-in { max-width: 980px; margin: 0 auto; }
+.bf-rot { display: block; font-size: .9rem; color: var(--text-secondary); }
+.bf-rot output { color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+.bf-resumo { display: block; font-size: .85rem; font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bf-linha { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.bf-linha button { min-width: 44px; padding: 6px 10px; }
+#x-menos, #x-mais { font-size: 20px; line-height: 1; }
+input[type=range] { flex: 1; width: 100%; min-height: 40px; accent-color: var(--accent); }
 .leitura { margin-top: 6px; font-size: .92rem; font-variant-numeric: tabular-nums; }
 .leitura table { border-collapse: collapse; width: 100%; }
 .leitura th, .leitura td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--grid); }

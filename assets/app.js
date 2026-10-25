@@ -340,6 +340,10 @@ function desenharLegenda(linhas) {
 function leitura() {
   const x = estado.x;
   $('x-val').textContent = pct(x); $('x-val2').textContent = pct(x);
+  // resumo compacto na barra fixa, visível em qualquer parte da página
+  const s1r = serie1(), s2r = estado.t2;
+  const curto = (s, n) => { const r = s && s.pontos.length ? valorEm(s.pontos, x, p => perc(p, n)) : null; return !r || r.y == null ? '—' : (r.exato ? '' : '≈') + f1.format(r.y); };
+  $('x-resumo').innerHTML = PRINCIPAIS.map(n => `<i class="dot" style="--c:${cor(n)}"></i>${nomeCand(n).split(' ')[0]} 1º ${curto(s1r, n)} · 2º ${curto(s2r, n)}`).join(' &nbsp; ');
   const s1 = serie1(), s2 = estado.t2;
   const nums = [...PRINCIPAIS, ...($('outros').checked ? ['outros'] : [])];
   const notas = [];
@@ -563,6 +567,13 @@ function iniciar() {
   $('escala').onchange = () => desenhar();
   $('outros').onchange = () => { desenhar(); leitura(); saldo(); };
   $('x').oninput = () => { estado.x = Number($('x').value); estado.xManual = true; desenharTudoLeve(); };
+  const passo = d => { estado.x = Math.max(0, Math.min(100, Math.round((estado.x + d) * 4) / 4)); estado.xManual = true; $('x').value = estado.x; desenharTudoLeve(); };
+  $('x-menos').onclick = () => passo(-1);
+  $('x-mais').onclick = () => passo(1);
+  $('x-atual').onclick = () => {
+    const pts = estado.t2?.pontos || [];
+    estado.xManual = false; estado.x = pts.length ? pts[pts.length - 1].x : 100; $('x').value = estado.x; desenharTudoLeve();
+  };
   let rz = 0;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(desenhar, 120); });
   matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => render());
