@@ -556,6 +556,7 @@ function projecaoCard() {
 let ordemUFs = 'apuracao';
 function quadroUFs() {
   const box = $('ufs');
+  if (!estado.ufsLidoEm) { box.innerHTML = '<p class="muted">Carregando a apuração dos estados…</p>'; return; }
   const ufs = Object.keys(UFS).filter(u => u !== 'br');
   const lin = ufs.map(u => {
     const p = estado.projUF?.[u];
